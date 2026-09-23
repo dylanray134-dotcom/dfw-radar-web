@@ -240,13 +240,13 @@ export function RadarApp() {
 
       <div className="pointer-events-none absolute inset-0 z-10 flex flex-col">
         <header className="glass-bar pointer-events-auto pt-safe pl-safe pr-safe">
-          <div className="mx-auto flex max-w-5xl items-center gap-2 px-2 py-2 sm:px-3">
+          <div className="mx-auto flex max-w-5xl items-center gap-1.5 px-1 py-2 sm:gap-2 sm:px-3">
             <RadarMark className="size-9 shrink-0" />
             <div className="min-w-0">
-              <p className="text-sm leading-none font-semibold tracking-wide">DFW Radar</p>
+              <p className="truncate text-sm leading-none font-semibold tracking-wide">DFW Radar</p>
               <p className="mt-1 truncate text-[11px] text-white/60">WFAA · KFWS</p>
             </div>
-            <div className="relative ml-1">
+            <div className="relative shrink-0">
               <Button
                 type="button"
                 variant="secondary"
@@ -274,15 +274,36 @@ export function RadarApp() {
                 </div>
               ) : null}
             </div>
-            <div className="ml-auto flex items-center gap-1">
-              <Button type="button" variant="ghost" size="icon" aria-label="Layers" onClick={() => openSheet("layers")}>
-                <Layers />
+            <div className="ml-auto flex shrink-0 items-center gap-0.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-10"
+                aria-label="Weather"
+                onClick={() => openSheet("weather")}
+              >
+                <CloudSun className="size-6" />
               </Button>
-              <Button type="button" variant="ghost" size="icon" aria-label="Weather" onClick={() => openSheet("weather")}>
-                <CloudSun />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-10"
+                aria-label="Layers"
+                onClick={() => openSheet("layers")}
+              >
+                <Layers className="size-6" />
               </Button>
-              <Button type="button" variant="ghost" size="icon" aria-label="Settings" onClick={() => openSheet("settings")}>
-                <SettingsIcon />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-10"
+                aria-label="Settings"
+                onClick={() => openSheet("settings")}
+              >
+                <SettingsIcon className="size-6" />
               </Button>
             </div>
           </div>
