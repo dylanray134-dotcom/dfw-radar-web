@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { projectToImage } from "@/lib/radar/project";
 import type { HiresLevel, Overlay, Scene, ViewState } from "@/lib/radar/types";
 import { BASE_FRAME, DEFAULT_VIEW } from "@/lib/radar/types";
 
@@ -13,6 +14,8 @@ type Props = {
   getRaw: (path: string | null | undefined) => ImageBitmap | null;
   getOverlayBitmap: (overlay: Overlay, frameIndex: number) => ImageBitmap | null;
   activeOverlays: Overlay[];
+  /** Browser geolocation fix. Null unless location permission produced coordinates. */
+  location: { lat: number; lon: number } | null;
 };
 
 function clampView(view: ViewState, cssW: number, cssH: number, imgW: number, imgH: number): ViewState {
@@ -47,9 +50,11 @@ export function RadarStage({
   getRaw,
   getOverlayBitmap,
   activeOverlays,
+  location,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const markerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef(view);
   viewRef.current = view;
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -66,6 +71,19 @@ export function RadarStage({
     const canvas = canvasRef.current;
     if (!wrap || !canvas) return;
 
+    const placeMarker = (cssX: number | null, cssY: number | null) => {
+      const marker = markerRef.current;
+      if (!marker) return;
+      if (cssX == null || cssY == null) {
+        marker.style.display = "none";
+        marker.setAttribute("aria-hidden", "true");
+        return;
+      }
+      marker.style.display = "block";
+      marker.style.transform = `translate(${cssX}px, ${cssY}px)`;
+      marker.setAttribute("aria-hidden", "false");
+    };
+
     const draw = () => {
       const rect = wrap.getBoundingClientRect();
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -76,11 +94,17 @@ export function RadarStage({
         canvas.height = height;
       }
       const context = canvas.getContext("2d");
-      if (!context) return;
+      if (!context) {
+        placeMarker(null, null);
+        return;
+      }
       context.setTransform(1, 0, 0, 1, 0, 0);
       context.fillStyle = "#071018";
       context.fillRect(0, 0, width, height);
-      if (!scene) return;
+      if (!scene) {
+        placeMarker(null, null);
+        return;
+      }
 
       const bg = getRaw(scene.bg);
       const imgW = bg?.width || BASE_FRAME.width;
@@ -108,6 +132,23 @@ export function RadarStage({
         context.globalAlpha = overlay.opacity;
         context.drawImage(bitmap, 0, 0, imgW, imgH);
         context.globalAlpha = 1;
+      }
+
+      const cssScale = fit * current.zoom;
+      const cssPanX = rect.width / 2 - current.cx * imgW * cssScale;
+      const cssPanY = rect.height / 2 - current.cy * imgH * cssScale;
+      const projected =
+        location && scene.projection ? projectToImage(scene.projection, location.lat, location.lon) : null;
+      if (
+        projected &&
+        projected.x >= 0 &&
+        projected.y >= 0 &&
+        projected.x <= imgW &&
+        projected.y <= imgH
+      ) {
+        placeMarker(cssPanX + projected.x * cssScale, cssPanY + projected.y * cssScale);
+      } else {
+        placeMarker(null, null);
       }
     };
 
@@ -154,7 +195,7 @@ export function RadarStage({
       observer.disconnect();
       wrap.removeEventListener("wheel", onWheel);
     };
-  }, [scene, frameIndex, revision, view, activeOverlays, getRaw, getOverlayBitmap, onViewChange]);
+  }, [scene, frameIndex, revision, view, activeOverlays, getRaw, getOverlayBitmap, onViewChange, location]);
 
   function point(event: { clientX: number; clientY: number }) {
     const rect = wrapRef.current?.getBoundingClientRect();
@@ -268,6 +309,20 @@ export function RadarStage({
       }}
     >
       <canvas ref={canvasRef} className="h-full w-full" role="img" aria-label="Live DFW weather radar" />
+      <div
+        ref={markerRef}
+        className="pointer-events-none absolute top-0 left-0"
+        style={{ display: "none" }}
+        data-location-dot=""
+        role="img"
+        aria-label="Your location"
+        aria-hidden="true"
+      >
+        <span className="absolute top-0 left-0 size-12 -translate-x-1/2 -translate-y-1/2">
+          <span className="location-halo block size-full rounded-full bg-[#4285F4]/35" />
+        </span>
+        <span className="absolute top-0 left-0 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#4285F4] shadow-[0_0_0_1px_rgba(0,0,0,0.45),0_1px_4px_rgba(0,0,0,0.45)]" />
+      </div>
     </div>
   );
 }

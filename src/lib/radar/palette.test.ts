@@ -82,6 +82,7 @@ bg.jpg overlay = N0B_20260923_0639-20260923_0640.png,fg.png,../graphics/navigati
     assert.equal(scene.overlays[0].enhanceIndex, 0);
     assert.equal(scene.overlays[0].legend?.x0, 582);
     assert.equal(scene.hires[0].bg, "metro40/hires/bg.jpg");
+    assert.equal(scene.projection, null);
     assert.equal(frameTimeFromName("STP_20260923_0638.png")?.toISOString(), "2026-09-23T06:38:00.000Z");
   });
 });

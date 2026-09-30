@@ -236,6 +236,7 @@ export function RadarApp() {
         getRaw={radar.getRaw}
         getOverlayBitmap={radar.getOverlayBitmap}
         activeOverlays={activeOverlays}
+        location={weather.deviceFix}
       />
 
       <div className="pointer-events-none absolute inset-0 z-10 flex flex-col">
