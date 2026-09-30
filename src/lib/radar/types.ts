@@ -1,3 +1,5 @@
+import type { LambertProjection } from "./project";
+
 export type Rgba = { r: number; g: number; b: number; a: number };
 
 export type PaletteStop = {
@@ -55,6 +57,8 @@ export type Scene = {
   overlays: Overlay[];
   tables: EnhanceTable[];
   hires: HiresLevel[];
+  /** Basemap projection from the WFAA coordinates line, when present. */
+  projection: LambertProjection | null;
 };
 
 export type ViewState = {

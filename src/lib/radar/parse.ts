@@ -1,5 +1,7 @@
 import { frameTimeFromName } from "./format";
 import { parseEnhance } from "./palette";
+import { parseCoordinates } from "./project";
+import type { LambertProjection } from "./project";
 import type { HiresLevel, Overlay, RadarFrame, Rect, Scene } from "./types";
 
 const SECTION_BY_INDEX: Record<number, string> = {
@@ -154,6 +156,7 @@ export function parseScene(
   let hiresFg: string[] = [];
   let hiresZooms: number[] = [];
   let fgOverlayIndex = 4;
+  let projection: LambertProjection | null = null;
 
   for (const raw of dataText.split(/\r?\n/)) {
     const line = raw.trim();
@@ -181,6 +184,8 @@ export function parseScene(
       hiresZooms = splitList(value)
         .map((n) => Number.parseFloat(n))
         .filter((n) => Number.isFinite(n) && n > 1);
+    } else if (key === "coordinates") {
+      projection = parseCoordinates(value);
     }
   }
 
@@ -204,6 +209,7 @@ export function parseScene(
     overlays,
     tables,
     hires,
+    projection,
   };
 }
 

@@ -61,16 +61,21 @@ async function readPosition(): Promise<GeolocationPosition> {
   });
 }
 
+export type DeviceFix = { lat: number; lon: number };
+
 export function useWeather(mode: LocationMode, customPoint: CustomPoint | null, requestToken: number) {
   const [report, setReport] = useState<WeatherReport | null>(null);
   const [status, setStatus] = useState<"idle" | "locating" | "loading" | "ready" | "error">("idle");
   const [notice, setNotice] = useState<string | null>(null);
   const [source, setSource] = useState<"device" | "dfw" | "custom" | null>(null);
+  const [deviceFix, setDeviceFix] = useState<DeviceFix | null>(null);
 
   useEffect(() => {
+    if (mode !== "device") setDeviceFix(null);
     if (mode === "prompt") {
       setStatus("idle");
       setNotice(null);
+      setSource(null);
       return;
     }
 
@@ -108,6 +113,7 @@ export function useWeather(mode: LocationMode, customPoint: CustomPoint | null, 
       if (cancelled) return;
       setSource(nextSource);
       setNotice(nextNotice);
+      setDeviceFix(nextSource === "device" ? { lat, lon } : null);
       setStatus("loading");
 
       try {
@@ -133,5 +139,5 @@ export function useWeather(mode: LocationMode, customPoint: CustomPoint | null, 
     };
   }, [mode, customPoint, requestToken]);
 
-  return { report, status, notice, source };
+  return { report, status, notice, source, deviceFix };
 }
