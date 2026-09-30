@@ -84,4 +84,40 @@ bg.jpg overlay = N0B_20260923_0639-20260923_0640.png,fg.png,../graphics/navigati
     assert.equal(scene.hires[0].bg, "metro40/hires/bg.jpg");
     assert.equal(frameTimeFromName("STP_20260923_0638.png")?.toISOString(), "2026-09-23T06:38:00.000Z");
   });
+
+  it("colorizes radar when a region publishes auto_enhance as zeros", () => {
+    const config = `
+overlay_labels = Radar/on, Precip Type, Cities-Roads/always, Navigation/always
+overlay_tooltip = Standard Radar, Precip, Cities, Map Navigation
+overlay_order = 1, 2, 3, 4
+:auto_enhance = 0,0,0,0
+overlay_radio = false/1, false, false, false
+overlay_transparent_amount = 100, 100, 100, 100
+overlay_preserve_list = t, f, f, f
+overlay_preserve = 587,392,737,412
+`;
+    const data = `
+image_base = ../nw40/
+bg.jpg overlay = N0B_20260930_2046-20260930_2046.png,PCPTYP_20260930_2046.png,fg.png,../graphics/navigation_north_texas.png
+`;
+    const scene = parseScene("nw40", config, data, ENHANCE);
+    assert.equal(scene.overlays[0].id, "radar");
+    assert.equal(scene.overlays[0].enhanceIndex, 0);
+    assert.equal(scene.tables[0].clutterCutoff, 102);
+    assert.equal(scene.overlays[1].enhanceIndex, null);
+    assert.equal(scene.overlays.map((overlay) => overlay.id).includes("navigation"), false);
+  });
+
+  it("keeps an explicit radar enhance index", () => {
+    const config = `
+overlay_labels = Radar/on, 1-Hr Rainfall
+auto_enhance = 2, 0
+`;
+    const data = `image_base = ../metro40/
+bg.jpg overlay = N0B_20260923_0639.png,RADPRECIPACCUM1H_20260923_0639.png
+`;
+    const scene = parseScene("metro40", config, data, ENHANCE);
+    assert.equal(scene.overlays[0].enhanceIndex, 1);
+    assert.equal(scene.overlays[1].enhanceIndex, null);
+  });
 });

@@ -86,6 +86,12 @@ function parsePreserve(listRaw: string | undefined, rectRaw: string | undefined)
   return out;
 }
 
+/** Index of the Radar Colors table, or null when this scene has no reflectivity ramp. */
+function radarColorsIndex(tables: { name: string }[]): number | null {
+  const index = tables.findIndex((table) => table.name.toLowerCase().startsWith("radar colors"));
+  return index === -1 ? null : index;
+}
+
 function parseLabel(raw: string): { label: string; defaultOn: boolean; skip: boolean } {
   let label = raw.trim();
   if (label.startsWith("/")) label = label.slice(1).trim();
@@ -130,7 +136,15 @@ export function parseScene(
     const slash = radio.indexOf("/");
     const group = slash === -1 ? null : radio.slice(slash + 1).trim() || null;
     const enhRaw = Number.parseInt(enhance[index] ?? "0", 10);
-    const enhanceIndex = Number.isFinite(enhRaw) && enhRaw > 0 ? enhRaw - 1 : null;
+    let enhanceIndex = Number.isFinite(enhRaw) && enhRaw > 0 ? enhRaw - 1 : null;
+    if (enhanceIndex != null && enhanceIndex >= tables.length) enhanceIndex = null;
+    // Quadrant and county loops publish auto_enhance = 0 (sometimes as the
+    // key ":auto_enhance"), so the TV player leaves N0B as grayscale. Those
+    // frames are still gray indexes: bins under ~0.10 in/hr paint as black
+    // ground clutter unless Radar Colors is applied, same as metro.
+    if (enhanceIndex == null && parsed.label.toLowerCase() === "radar") {
+      enhanceIndex = radarColorsIndex(tables);
+    }
     const opacityRaw = Number.parseFloat(amounts[index] ?? "100");
     const opacity = Number.isFinite(opacityRaw) ? Math.min(1, Math.max(0, opacityRaw / 100)) : 1;
     overlays.push({
@@ -141,7 +155,7 @@ export function parseScene(
       section: SECTION_BY_INDEX[index] ?? "Layers",
       defaultOn: parsed.defaultOn,
       group,
-      enhanceIndex: enhanceIndex != null && enhanceIndex < tables.length ? enhanceIndex : null,
+      enhanceIndex,
       opacity,
       legend: legends[index] ?? null,
       drawOrder: drawOrder.get(index) ?? index + 100,
