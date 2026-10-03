@@ -106,7 +106,6 @@ export function useRadar(
 ) {
   const [scene, setScene] = useState<Scene | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [frameIndex, setFrameIndex] = useState(0);
@@ -132,7 +131,6 @@ export function useRadar(
     if (!sameRegion) {
       setScene(null);
       setStatus("loading");
-      setError(null);
       setProgress(0);
     } else {
       setRefreshing(true);
@@ -164,14 +162,12 @@ export function useRadar(
         setSyncedAt(new Date());
         setStatus("ready");
         setRefreshing(false);
-      } catch (err) {
+      } catch {
         if (controller.signal.aborted) return;
-        const message = err instanceof Error ? err.message : "Could not load radar";
         if (sameRegion && previous) {
           setRefreshError("Couldn't refresh frames. Showing the last loop.");
           setRefreshing(false);
         } else {
-          setError(message);
           setStatus("error");
           setRefreshing(false);
         }
@@ -218,6 +214,19 @@ export function useRadar(
       return painted.current.has(paintKey(item.path, item.overlay, tables, hideClutter));
     };
 
+    const neededPaint = new Set<string>();
+    for (const item of wanted) {
+      if (item.overlay && needsPaint(item.overlay)) {
+        neededPaint.add(paintKey(item.path, item.overlay, tables, hideClutter));
+      }
+    }
+    for (const [key, bitmap] of painted.current) {
+      if (!neededPaint.has(key)) {
+        bitmap.close();
+        painted.current.delete(key);
+      }
+    }
+
     let done = wanted.filter(isReady).length;
     setProgress(wanted.length === 0 ? 1 : done / wanted.length);
     const queue = wanted.filter((item) => !isReady(item));
@@ -240,7 +249,17 @@ export function useRadar(
             const response = await fetch(apiUrl(item.path), { signal: controller.signal });
             if (!response.ok) throw new Error(String(response.status));
             raw = await createImageBitmap(await response.blob());
-            cache.current.set(item.path, raw);
+            if (controller.signal.aborted) {
+              raw.close();
+              return;
+            }
+            const raced = cache.current.get(item.path);
+            if (raced) {
+              raw.close();
+              raw = raced;
+            } else {
+              cache.current.set(item.path, raw);
+            }
           }
           if (item.overlay && needsPaint(item.overlay)) {
             const key = paintKey(item.path, item.overlay, tables, hideClutter);
@@ -249,7 +268,12 @@ export function useRadar(
                 item.overlay.enhanceIndex == null ? null : (tables[item.overlay.enhanceIndex] ?? null);
               const cutoff = hideClutter && table ? table.clutterCutoff : null;
               const bitmap = await paintBitmap(raw, table?.lut ?? null, table ? cutoff : null, item.overlay.legend);
-              painted.current.set(key, bitmap);
+              if (controller.signal.aborted || painted.current.has(key)) {
+                bitmap.close();
+                if (controller.signal.aborted) return;
+              } else {
+                painted.current.set(key, bitmap);
+              }
             }
           }
         } catch {
@@ -288,7 +312,6 @@ export function useRadar(
   return {
     scene,
     status,
-    error,
     refreshing,
     refreshError,
     frameIndex,

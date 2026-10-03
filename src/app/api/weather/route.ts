@@ -1,10 +1,11 @@
+import { upstreamTimeout } from "@/lib/upstream";
 import { describeWeather } from "@/lib/weather/codes";
 
+// Dynamic so a caller's fallback name is not cached as the route response.
+// Upstream fetches opt into the data cache; their URL is the rounded cell.
 export const dynamic = "force-dynamic";
 
-type CacheEntry = { at: number; body: unknown };
-const cache = new Map<string, CacheEntry>();
-const TTL_MS = 10 * 60 * 1000;
+const REVALIDATE_SECONDS = 10 * 60;
 
 type Nominatim = {
   address?: {
@@ -17,6 +18,29 @@ type Nominatim = {
     state?: string;
   };
 };
+
+type Forecast = {
+  current?: Record<string, number | string>;
+  hourly?: {
+    time: string[];
+    temperature_2m: number[];
+    precipitation_probability: number[];
+    weather_code: number[];
+    precipitation: number[];
+  };
+  daily?: {
+    time: string[];
+    weather_code: number[];
+    temperature_2m_max: number[];
+    temperature_2m_min: number[];
+    precipitation_sum: number[];
+    precipitation_probability_max: number[];
+  };
+};
+
+export function weatherCell(lat: number, lon: number): { latitude: string; longitude: string } {
+  return { latitude: lat.toFixed(3), longitude: lon.toFixed(3) };
+}
 
 function chicagoStamp(date: Date): string {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -33,34 +57,28 @@ function chicagoStamp(date: Date): string {
   return `${get("year")}-${get("month")}-${get("day")}T${hour}:${get("minute")}`;
 }
 
-function placeName(address: Nominatim["address"], fallback: string): string {
-  if (!address) return fallback;
+/** City label from a Nominatim address. Null when the lookup did not name a place. */
+export function placeFromAddress(address: Nominatim["address"]): string | null {
+  if (!address) return null;
   const city =
     address.city || address.town || address.village || address.hamlet || address.suburb || address.county;
-  if (!city) return fallback;
+  if (!city) return null;
   return address.state ? `${city}, ${address.state}` : city;
 }
 
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const lat = Number(url.searchParams.get("lat"));
-  const lon = Number(url.searchParams.get("lon"));
-  const fallbackName = url.searchParams.get("name")?.slice(0, 80) || "Your location";
-  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
-    return Response.json({ error: "Need a latitude and longitude." }, { status: 400 });
-  }
+function cachedGet(url: string, headers?: HeadersInit): Promise<Response> {
+  return fetch(url, {
+    cache: "force-cache",
+    next: { revalidate: REVALIDATE_SECONDS },
+    signal: upstreamTimeout(),
+    headers,
+  });
+}
 
-  const key = `${lat.toFixed(3)},${lon.toFixed(3)}`;
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL_MS) {
-    return Response.json(hit.body, {
-      headers: { "Cache-Control": "public, max-age=120" },
-    });
-  }
-
+function forecastUrl(cell: { latitude: string; longitude: string }): string {
   const meteoUrl = new URL("https://api.open-meteo.com/v1/forecast");
-  meteoUrl.searchParams.set("latitude", String(lat));
-  meteoUrl.searchParams.set("longitude", String(lon));
+  meteoUrl.searchParams.set("latitude", cell.latitude);
+  meteoUrl.searchParams.set("longitude", cell.longitude);
   meteoUrl.searchParams.set(
     "current",
     "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,is_day",
@@ -75,52 +93,61 @@ export async function GET(request: Request) {
   meteoUrl.searchParams.set("precipitation_unit", "inch");
   meteoUrl.searchParams.set("timezone", "America/Chicago");
   meteoUrl.searchParams.set("forecast_days", "5");
+  return meteoUrl.toString();
+}
 
-  let forecast: {
-    current?: Record<string, number | string>;
-    hourly?: {
-      time: string[];
-      temperature_2m: number[];
-      precipitation_probability: number[];
-      weather_code: number[];
-      precipitation: number[];
-    };
-    daily?: {
-      time: string[];
-      weather_code: number[];
-      temperature_2m_max: number[];
-      temperature_2m_min: number[];
-      precipitation_sum: number[];
-      precipitation_probability_max: number[];
-    };
-  };
+function nominatimUrl(cell: { latitude: string; longitude: string }): string {
+  const geoUrl = new URL("https://nominatim.openstreetmap.org/reverse");
+  geoUrl.searchParams.set("format", "jsonv2");
+  geoUrl.searchParams.set("lat", cell.latitude);
+  geoUrl.searchParams.set("lon", cell.longitude);
+  geoUrl.searchParams.set("zoom", "12");
+  return geoUrl.toString();
+}
+
+async function loadForecast(cell: { latitude: string; longitude: string }): Promise<Forecast | Response> {
   try {
-    const response = await fetch(meteoUrl, { cache: "no-store" });
+    const response = await cachedGet(forecastUrl(cell));
     if (!response.ok) {
       return Response.json({ error: "Weather service did not respond." }, { status: 502 });
     }
-    forecast = await response.json();
+    return (await response.json()) as Forecast;
   } catch {
     return Response.json({ error: "Weather service is unreachable." }, { status: 502 });
   }
+}
 
-  let place = fallbackName;
+async function loadPlace(
+  cell: { latitude: string; longitude: string },
+  fallbackName: string,
+): Promise<{ place: string; shared: boolean }> {
   try {
-    const geoUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=12`;
-    const geo = await fetch(geoUrl, {
-      headers: {
-        "User-Agent": "DFWRadar/1.0 (local weather companion)",
-        Accept: "application/json",
-      },
-      cache: "no-store",
+    const geo = await cachedGet(nominatimUrl(cell), {
+      "User-Agent": "DFWRadar/1.0 (local weather companion)",
+      Accept: "application/json",
     });
-    if (geo.ok) {
-      const data = (await geo.json()) as Nominatim;
-      place = placeName(data.address, fallbackName);
-    }
+    if (!geo.ok) return { place: fallbackName, shared: false };
+    const data = (await geo.json()) as Nominatim;
+    const place = placeFromAddress(data.address);
+    if (!place) return { place: fallbackName, shared: false };
+    return { place, shared: true };
   } catch {
-    place = fallbackName;
+    return { place: fallbackName, shared: false };
   }
+}
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const lat = Number(url.searchParams.get("lat"));
+  const lon = Number(url.searchParams.get("lon"));
+  const fallbackName = url.searchParams.get("name")?.slice(0, 80) || "Your location";
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+    return Response.json({ error: "Need a latitude and longitude." }, { status: 400 });
+  }
+
+  const cell = weatherCell(lat, lon);
+  const [forecast, located] = await Promise.all([loadForecast(cell), loadPlace(cell, fallbackName)]);
+  if (forecast instanceof Response) return forecast;
 
   const hourly = forecast.hourly;
   const chicagoNow = chicagoStamp(new Date());
@@ -163,7 +190,7 @@ export async function GET(request: Request) {
   const current = forecast.current ?? {};
   const code = Number(current.weather_code ?? 0);
   const body = {
-    place,
+    place: located.place,
     latitude: lat,
     longitude: lon,
     fetchedAt: new Date().toISOString(),
@@ -182,8 +209,11 @@ export async function GET(request: Request) {
     hourly: hours,
     daily: days,
   };
-  cache.set(key, { at: Date.now(), body });
   return Response.json(body, {
-    headers: { "Cache-Control": "public, max-age=120" },
+    headers: {
+      // A resolved place is safe to share. A caller fallback is not: the data-cache
+      // key is the rounded cell and does not include that name.
+      "Cache-Control": located.shared ? "public, max-age=120" : "private, no-store",
+    },
   });
 }
