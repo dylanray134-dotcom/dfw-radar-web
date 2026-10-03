@@ -1,3 +1,5 @@
+import { upstreamTimeout } from "@/lib/upstream";
+
 export const dynamic = "force-dynamic";
 
 const CDN = "https://cdn.tegna-media.com/wfaa/weather/myownradar/750x422/";
@@ -20,6 +22,7 @@ export async function GET(
         Accept: "*/*",
       },
       cache: "no-store",
+      signal: upstreamTimeout(),
     });
   } catch {
     return new Response("Radar CDN unavailable", { status: 502 });
