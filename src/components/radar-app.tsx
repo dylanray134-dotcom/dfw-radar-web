@@ -55,6 +55,7 @@ export function RadarApp() {
   const [wide, setWide] = useState(false);
   const [weatherToken, setWeatherToken] = useState(0);
   const booted = useRef(false);
+  const regionMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (booted.current) return;
@@ -160,6 +161,26 @@ export function RadarApp() {
     return () => window.removeEventListener("keydown", onKey);
   }, [frameCount, setFrameIndex]);
 
+  useEffect(() => {
+    if (!regionOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setRegionOpen(false);
+    };
+    const onPointer = (event: PointerEvent) => {
+      const root = regionMenuRef.current;
+      if (root && event.target instanceof Node && root.contains(event.target)) return;
+      setRegionOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+    };
+  }, [regionOpen]);
+
   const openSheet = useCallback((next: SheetId | null) => {
     if (next) setPanel(next);
     setSheet(next);
@@ -193,11 +214,8 @@ export function RadarApp() {
 
   function chooseRegion(regionId: string) {
     setRegionOpen(false);
-    setSettings((current) => {
-      const next = { ...current, regionId };
-      setView(viewFor(next, regionId));
-      return next;
-    });
+    setSettings((current) => ({ ...current, regionId }));
+    setView(viewFor(settings, regionId));
   }
 
   function toggleLayer(overlay: Overlay) {
@@ -247,22 +265,29 @@ export function RadarApp() {
               <p className="truncate text-sm leading-none font-semibold tracking-wide">DFW Radar</p>
               <p className="mt-1 truncate text-[11px] text-white/60">WFAA · KFWS</p>
             </div>
-            <div className="relative shrink-0">
+            <div className="relative shrink-0" ref={regionMenuRef}>
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
                 aria-expanded={regionOpen}
+                aria-haspopup="menu"
+                aria-controls="region-menu"
                 onClick={() => setRegionOpen((open) => !open)}
               >
                 {region.short}
               </Button>
               {regionOpen ? (
-                <div className="absolute top-10 left-0 z-30 w-56 overflow-hidden rounded-xl border border-white/10 bg-[#0d1b24] shadow-2xl">
+                <div
+                  id="region-menu"
+                  role="menu"
+                  className="absolute top-10 left-0 z-30 w-56 overflow-hidden rounded-xl border border-white/10 bg-[#0d1b24] shadow-2xl"
+                >
                   {REGIONS.map((item) => (
                     <button
                       key={item.id}
                       type="button"
+                      role="menuitem"
                       className={`block w-full px-3 py-2 text-left text-sm hover:bg-white/8 ${
                         item.id === region.id ? "text-primary" : "text-white"
                       }`}

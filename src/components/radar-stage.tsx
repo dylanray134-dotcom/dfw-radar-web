@@ -63,8 +63,7 @@ export function RadarStage({
     lastX: number;
     lastY: number;
     lastDist: number;
-    moved: boolean;
-  }>({ mode: "none", lastX: 0, lastY: 0, lastDist: 0, moved: false });
+  }>({ mode: "none", lastX: 0, lastY: 0, lastDist: 0 });
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -250,7 +249,6 @@ export function RadarStage({
         target.setPointerCapture(event.pointerId);
         const at = point(event);
         pointers.current.set(event.pointerId, at);
-        gesture.current.moved = false;
         if (pointers.current.size === 2) {
           const [a, b] = [...pointers.current.values()];
           gesture.current.mode = "pinch";
@@ -275,13 +273,11 @@ export function RadarStage({
             zoomAt(midX, midY, viewRef.current.zoom * (dist / gesture.current.lastDist));
           }
           gesture.current.lastDist = dist;
-          gesture.current.moved = true;
           return;
         }
         if (gesture.current.mode !== "pan") return;
         const dx = at.x - gesture.current.lastX;
         const dy = at.y - gesture.current.lastY;
-        if (Math.hypot(dx, dy) > 2) gesture.current.moved = true;
         gesture.current.lastX = at.x;
         gesture.current.lastY = at.y;
         if (viewRef.current.zoom <= 1.001) return;
