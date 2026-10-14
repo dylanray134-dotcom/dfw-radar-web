@@ -189,6 +189,34 @@ input[type="range"].scrub::-moz-range-track {
   animation: location-pulse 2.4s ease-out infinite;
 }
 
+.radar-stage {
+  background: #071018;
+}
+
+.radar-map {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  overflow: hidden;
+  background: #071018;
+  transform: translate(-50%, -50%);
+}
+
+.radar-map.leaflet-container {
+  font: inherit;
+  background: #071018;
+}
+
+.leaflet-control-attribution {
+  background: rgb(7 16 24 / 78%);
+  color: rgb(255 255 255 / 72%);
+  max-width: calc(100% - 1rem);
+}
+
+.leaflet-control-attribution a {
+  color: white;
+}
+
 @keyframes location-pulse {
   0% {
     transform: scale(0.4);

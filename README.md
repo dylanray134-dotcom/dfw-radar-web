@@ -23,7 +23,7 @@ npm start
 ## What you can do
 
 - Play, pause, scrub, and jump the latest WFAA sweeps. Times are shown in `America/Chicago`.
-- Pinch, scroll-wheel, or double-click to zoom. Drag to pan. Reset zoom from the stage or Settings.
+- Pinch, scroll-wheel, or double-click to zoom the map. Drag to pan. The widest view is that region's radar coverage, so you cannot zoom out past the frame. Reset zoom from the stage or Settings.
 - Switch regions: DFW Metro, North Texas, the four quadrants, Tarrant & Dallas, Denton & Collin.
 - Toggle WFAA overlays. Reflectivity, rainfall, hail, and rotation tracks share one slot.
 - Allow location for a city name (OpenStreetMap Nominatim) and a forecast (Open-Meteo). Skip it and the app uses Dallas–Fort Worth coordinates. Radar does not need location.
@@ -52,7 +52,18 @@ WFAA publishes MyOwnRadar as grayscale PNG frames plus `enhance_radar.txt` (the 
 3. Makes Radar Colors bins under about **0.10 in/hr** transparent. That cutoff is the gray index where the `0.10` row starts in `enhance_radar.txt` (102 in the current table), so a dry KFWS disk does not read as light rain.
 4. Skips the Navigation overlay (`navigation_north_texas.png`), which is the black region pad from the TV player.
 5. Punches out the baked-in color-scale rectangle and draws a scale in the UI instead.
-6. Composites the basemap, enabled overlays, and (when zoomed) the hi-res basemap and city mask.
+6. Leaves off `bg.jpg` (the baked-in satellite photo) and the hi-res photo. Precipitation and the other WFAA layers are warped from the Lambert frame onto the map at that region's geographic bounds.
+
+## Base map
+
+Radar is drawn on a map instead of WFAA's photo.
+
+`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` selects the base map. It is optional, and it is inlined when the app is built, so set it in the environment before `npm run build` (or in the host's build settings).
+
+- When the variable is set, the page loads the Google Maps JavaScript API and uses hybrid imagery under the radar. Google gives the Maps JavaScript API a monthly free credit, but a key only works on a Cloud project that has billing enabled. This app does not turn billing on and does not create paid Google resources. Leave the variable unset unless you already have a key you are comfortable using inside that free credit.
+- When the variable is missing, or the Maps script cannot load, the page uses Leaflet with CARTO Voyager tiles (OpenStreetMap data, no key). Pan, overlay alignment, and the zoom clamp are the same.
+
+Each region in the menu has its own frame bounds from the WFAA Lambert coordinates. The map is created with `restriction: { latLngBounds, strictBounds: true }` and a `minZoom` that makes the widest view that frame. Zooming in still stops at 8× that fitted view, the same limit as the previous stage. The photo background is not drawn, so only precipitation and the data layers sit on the map.
 
 The scene refetches about every 5 minutes, matching WFAA’s `auto_refresh`.
 
@@ -65,7 +76,7 @@ Weather is a second route, `/api/weather`:
 
 The app needs the Node server for the proxy. A static export would bring back the CORS block.
 
-One-command deploy on Vercel (free tier is enough; no paid APIs):
+One-command deploy on Vercel (the app runs without a paid map key; set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` at build time only if you want Google imagery):
 
 ```bash
 npx vercel
