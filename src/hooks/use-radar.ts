@@ -73,7 +73,9 @@ function closeAll(bitmaps: Map<string, ImageBitmap>) {
 
 function retain(scene: Scene, raw: Map<string, ImageBitmap>, colored: Map<string, ImageBitmap>) {
   const keep = new Set<string>();
+  keep.add(scene.bg);
   for (const level of scene.hires) {
+    if (level.bg) keep.add(level.bg);
     if (level.fg) keep.add(level.fg);
   }
   for (const frame of scene.frames) {
@@ -186,7 +188,7 @@ export function useRadar(
   const hiresKey = scene
     ? scene.hires
         .filter((level) => zoom + 0.05 >= level.zoom * 0.8)
-        .map((level) => level.fg)
+        .flatMap((level) => [level.bg, level.fg])
         .filter((path): path is string => Boolean(path))
         .join("|")
     : "";
@@ -195,7 +197,7 @@ export function useRadar(
     if (!scene) return;
     const controller = new AbortController();
     const tables = scene.tables;
-    const wanted: { path: string; overlay: Overlay | null }[] = [];
+    const wanted: { path: string; overlay: Overlay | null }[] = [{ path: scene.bg, overlay: null }];
     if (hiresKey) {
       for (const path of hiresKey.split("|")) wanted.push({ path, overlay: null });
     }

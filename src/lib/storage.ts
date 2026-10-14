@@ -1,5 +1,5 @@
 import type { ViewState } from "./radar/types";
-import { DEFAULT_VIEW, MAX_VIEW_ZOOM } from "./radar/types";
+import { DEFAULT_VIEW } from "./radar/types";
 
 export type LocationMode = "prompt" | "device" | "dfw" | "custom";
 
@@ -78,7 +78,7 @@ export function viewFor(settings: Settings, regionId: string): ViewState {
   const saved = settings.views[regionId];
   if (!saved || !Number.isFinite(saved.zoom)) return DEFAULT_VIEW;
   return {
-    zoom: Math.min(MAX_VIEW_ZOOM, Math.max(1, saved.zoom)),
+    zoom: Math.min(8, Math.max(1, saved.zoom)),
     cx: Number.isFinite(saved.cx) ? saved.cx : 0.5,
     cy: Number.isFinite(saved.cy) ? saved.cy : 0.5,
   };
