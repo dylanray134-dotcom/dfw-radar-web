@@ -70,3 +70,6 @@ export type ViewState = {
 export const BASE_FRAME = { width: 750, height: 422 };
 
 export const DEFAULT_VIEW: ViewState = { zoom: 1, cx: 0.5, cy: 0.5 };
+
+/** Linear scale above the fitted region. 1 shows the whole frame; 8 matches the previous stage limit. */
+export const MAX_VIEW_ZOOM = 8;
