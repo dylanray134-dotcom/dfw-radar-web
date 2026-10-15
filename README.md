@@ -28,6 +28,8 @@ npm start
 - Toggle WFAA overlays. Reflectivity, rainfall, hail, and rotation tracks share one slot.
 - Allow location for a city name (OpenStreetMap Nominatim) and a forecast (Open-Meteo). Skip it and the app uses Dallas–Fort Worth coordinates. Radar does not need location.
 - Deep link a sheet with `?sheet=weather`, `?sheet=layers`, or `?sheet=settings`.
+- Choose an auto-refresh interval in Settings (off, or 1–15 minutes; 5 minutes is the default). Radar frames, and weather once a place is set, refresh on that cadence while the tab is visible.
+- Turn on Keep screen on to request a screen wake lock while the tab is visible.
 
 Choices are stored in `localStorage` under `dfw-radar-v1`.
 
@@ -54,7 +56,7 @@ WFAA publishes MyOwnRadar as grayscale PNG frames plus `enhance_radar.txt` (the 
 5. Punches out the baked-in color-scale rectangle and draws a scale in the UI instead.
 6. Composites the basemap, enabled overlays, and (when zoomed) the hi-res basemap and city mask.
 
-The scene refetches about every 5 minutes, matching WFAA’s `auto_refresh`.
+The scene refetches on the Settings auto-refresh interval while the tab is visible. The default is 5 minutes, matching WFAA’s `auto_refresh`. Off refreshes only on load and when you refresh by hand. Weather uses the same cadence once a place is set.
 
 Weather is a second route, `/api/weather`:
 

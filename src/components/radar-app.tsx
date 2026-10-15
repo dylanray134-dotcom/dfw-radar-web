@@ -20,6 +20,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useRadar } from "@/hooks/use-radar";
+import { useScreenWakeLock } from "@/hooks/use-wake-lock";
 import { useWeather } from "@/hooks/use-weather";
 import { formatClock, formatFrameStamp } from "@/lib/radar/format";
 import { isOverlayOn } from "@/lib/radar/parse";
@@ -27,9 +28,11 @@ import { regionById, REGIONS } from "@/lib/radar/regions";
 import type { Overlay, ViewState } from "@/lib/radar/types";
 import { DEFAULT_VIEW } from "@/lib/radar/types";
 import {
+  autoRefreshIntervalMs,
   DFW_POINT,
   loadSettings,
   saveSettings,
+  shouldCatchUpRefresh,
   viewFor,
   type CustomPoint,
   type LocationMode,
@@ -87,6 +90,10 @@ export function RadarApp() {
   const frameCount = radar.scene?.frames.length ?? 0;
   const syncedRef = useRef(radar.syncedAt);
   syncedRef.current = radar.syncedAt;
+  const locationModeRef = useRef(settings.locationMode);
+  locationModeRef.current = settings.locationMode;
+
+  useScreenWakeLock(hydrated && settings.keepScreenOn);
 
   useEffect(() => {
     if (radar.status !== "ready" || booted.current) return;
@@ -97,18 +104,33 @@ export function RadarApp() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const timer = window.setInterval(() => refresh(), 5 * 60 * 1000);
+    const intervalMs = autoRefreshIntervalMs(settings.refreshMinutes);
+    if (intervalMs == null) return;
+    let lastKick = 0;
+
+    const kick = () => {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastKick < 1000) return;
+      lastKick = now;
+      refresh();
+      if (locationModeRef.current !== "prompt") {
+        setWeatherToken((token) => token + 1);
+      }
+    };
+
+    const timer = window.setInterval(kick, intervalMs);
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
-      const synced = syncedRef.current?.getTime() ?? 0;
-      if (Date.now() - synced > 5 * 60 * 1000) refresh();
+      const synced = syncedRef.current?.getTime() ?? null;
+      if (shouldCatchUpRefresh(synced, Date.now(), intervalMs)) kick();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [hydrated, refresh]);
+  }, [hydrated, refresh, settings.refreshMinutes]);
 
   useEffect(() => {
     if (!playing || frameCount === 0) return;
