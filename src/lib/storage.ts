@@ -5,6 +5,17 @@ export type LocationMode = "prompt" | "device" | "dfw" | "custom";
 
 export type CustomPoint = { lat: number; lon: number; name: string };
 
+export const REFRESH_CHOICES = [
+  { minutes: 0, label: "Off" },
+  { minutes: 1, label: "1 minute" },
+  { minutes: 2, label: "2 minutes" },
+  { minutes: 5, label: "5 minutes" },
+  { minutes: 10, label: "10 minutes" },
+  { minutes: 15, label: "15 minutes" },
+] as const;
+
+export type RefreshMinutes = (typeof REFRESH_CHOICES)[number]["minutes"];
+
 export type Settings = {
   regionId: string;
   dwellMs: number;
@@ -14,6 +25,8 @@ export type Settings = {
   views: Record<string, ViewState>;
   locationMode: LocationMode;
   customPoint: CustomPoint | null;
+  refreshMinutes: RefreshMinutes;
+  keepScreenOn: boolean;
 };
 
 export const SETTINGS_KEY = "dfw-radar-v1";
@@ -27,7 +40,25 @@ export const DEFAULT_SETTINGS: Settings = {
   views: {},
   locationMode: "prompt",
   customPoint: null,
+  refreshMinutes: 5,
+  keepScreenOn: false,
 };
+
+export function isRefreshMinutes(value: unknown): value is RefreshMinutes {
+  return REFRESH_CHOICES.some((choice) => choice.minutes === value);
+}
+
+/** Milliseconds between auto-refreshes. Null means the loop is off. */
+export function autoRefreshIntervalMs(minutes: RefreshMinutes): number | null {
+  if (minutes <= 0) return null;
+  return minutes * 60 * 1000;
+}
+
+/** A visible tab should catch up when the last sync is at least one interval old. */
+export function shouldCatchUpRefresh(syncedAtMs: number | null, nowMs: number, intervalMs: number | null): boolean {
+  if (intervalMs == null || syncedAtMs == null) return false;
+  return nowMs - syncedAtMs >= intervalMs;
+}
 
 export const DFW_POINT: CustomPoint = {
   lat: 32.7767,
@@ -46,26 +77,31 @@ export function loadSettings(): Settings {
     const raw = window.localStorage.getItem(SETTINGS_KEY);
     if (!raw) return DEFAULT_SETTINGS;
     const parsed = JSON.parse(raw) as Partial<Settings>;
-    return {
-      ...DEFAULT_SETTINGS,
-      ...parsed,
-      regionId: typeof parsed.regionId === "string" ? parsed.regionId : DEFAULT_SETTINGS.regionId,
-      dwellMs: clampDwell(parsed.dwellMs ?? DEFAULT_SETTINGS.dwellMs),
-      rememberZoom: parsed.rememberZoom !== false,
-      hideClutter: parsed.hideClutter !== false,
-      layers: parsed.layers && typeof parsed.layers === "object" ? parsed.layers : {},
-      views: parsed.views && typeof parsed.views === "object" ? parsed.views : {},
-      locationMode:
-        parsed.locationMode === "device" ||
-        parsed.locationMode === "dfw" ||
-        parsed.locationMode === "custom"
-          ? parsed.locationMode
-          : "prompt",
-      customPoint: parsed.customPoint ?? null,
-    };
+    return normalizeSettings(parsed);
   } catch {
     return DEFAULT_SETTINGS;
   }
+}
+
+export function normalizeSettings(parsed: Partial<Settings> | null | undefined): Settings {
+  const source = parsed ?? {};
+  return {
+    ...DEFAULT_SETTINGS,
+    ...source,
+    regionId: typeof source.regionId === "string" ? source.regionId : DEFAULT_SETTINGS.regionId,
+    dwellMs: clampDwell(source.dwellMs ?? DEFAULT_SETTINGS.dwellMs),
+    rememberZoom: source.rememberZoom !== false,
+    hideClutter: source.hideClutter !== false,
+    layers: source.layers && typeof source.layers === "object" ? source.layers : {},
+    views: source.views && typeof source.views === "object" ? source.views : {},
+    locationMode:
+      source.locationMode === "device" || source.locationMode === "dfw" || source.locationMode === "custom"
+        ? source.locationMode
+        : "prompt",
+    customPoint: source.customPoint ?? null,
+    refreshMinutes: isRefreshMinutes(source.refreshMinutes) ? source.refreshMinutes : DEFAULT_SETTINGS.refreshMinutes,
+    keepScreenOn: source.keepScreenOn === true,
+  };
 }
 
 export function saveSettings(settings: Settings): void {

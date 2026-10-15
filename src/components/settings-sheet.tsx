@@ -1,10 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { REGIONS } from "@/lib/radar/regions";
-import type { Settings } from "@/lib/storage";
+import { REFRESH_CHOICES, type Settings } from "@/lib/storage";
 
 type Props = {
   settings: Settings;
@@ -14,6 +15,11 @@ type Props = {
 };
 
 export function SettingsSheet({ settings, onChange, onResetZoom, onRegion }: Props) {
+  const [wakeLockSupported, setWakeLockSupported] = useState<boolean | null>(null);
+  useEffect(() => {
+    setWakeLockSupported(typeof navigator.wakeLock?.request === "function");
+  }, []);
+
   return (
     <div className="flex flex-col gap-6 pb-6">
       <section className="flex flex-col gap-2">
@@ -34,6 +40,32 @@ export function SettingsSheet({ settings, onChange, onResetZoom, onRegion }: Pro
         />
         <p className="text-xs text-muted-foreground">
           How long each sweep stays on screen. The newest frame holds a little longer before the loop repeats.
+        </p>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="text-sm font-medium">Auto-refresh</h3>
+        <div role="radiogroup" aria-label="Auto-refresh interval" className="grid grid-cols-2 gap-2">
+          {REFRESH_CHOICES.map((choice) => {
+            const selected = settings.refreshMinutes === choice.minutes;
+            return (
+              <Button
+                key={choice.minutes}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                variant={selected ? "default" : "secondary"}
+                className="h-9"
+                onClick={() => onChange({ refreshMinutes: choice.minutes })}
+              >
+                {choice.label}
+              </Button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          While this tab is visible, pull new radar frames on this cadence, and weather when a place is set. Off
+          refreshes only when the page loads or you refresh by hand. Changing the interval starts the timer over.
         </p>
       </section>
 
@@ -60,6 +92,25 @@ export function SettingsSheet({ settings, onChange, onResetZoom, onRegion }: Pro
           checked={settings.hideClutter}
           onCheckedChange={(checked) => onChange({ hideClutter: checked })}
           aria-label="Hide dry-air clutter"
+        />
+      </section>
+
+      <section className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">Keep screen on</p>
+          <p className="text-xs text-muted-foreground">
+            Hold a screen wake lock while this tab is visible so the display stays awake.
+          </p>
+          {settings.keepScreenOn && wakeLockSupported === false ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              This browser has no Screen Wake Lock. The preference is saved and does nothing here.
+            </p>
+          ) : null}
+        </div>
+        <Switch
+          checked={settings.keepScreenOn}
+          onCheckedChange={(checked) => onChange({ keepScreenOn: checked })}
+          aria-label="Keep screen on"
         />
       </section>
 
